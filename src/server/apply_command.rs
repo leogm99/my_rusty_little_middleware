@@ -10,14 +10,14 @@ const DEFINE: u8 = 0x64;
 const PUSH: u8 = 0x75;
 const POP: u8 = 0x6f;
 
-use super::message_queue_monitor::MessageQueueMonitor;
+use super::message_queue_map::MessageQueueMap;
 
 pub trait ApplyCommand {
-    fn apply_command(&mut self, queue_map: &Arc<Mutex<MessageQueueMonitor>>) -> Option<String>;
+    fn apply_command(&mut self, queue_map: &Arc<Mutex<MessageQueueMap>>) -> Option<String>;
 }
 
 impl ApplyCommand for DefineCommand {
-    fn apply_command(&mut self, queue_map: &Arc<Mutex<MessageQueueMonitor>>) -> Option<String> {
+    fn apply_command(&mut self, queue_map: &Arc<Mutex<MessageQueueMap>>) -> Option<String> {
         let _ = queue_map
             .lock()
             .unwrap()
@@ -27,25 +27,42 @@ impl ApplyCommand for DefineCommand {
 }
 
 impl ApplyCommand for PushCommand {
-    fn apply_command(&mut self, queue_map: &Arc<Mutex<MessageQueueMonitor>>) -> Option<String> {
-        let _ = queue_map
-            .lock()
-            .unwrap()
-            .push_to_queue(self.queue_name_as_copy(), self.message_as_copy());
+    fn apply_command(&mut self, queue_map: &Arc<Mutex<MessageQueueMap>>) -> Option<String> {
+        let queue = {
+            queue_map.lock().unwrap().get_existing(self.queue_name_as_copy()) 
+        };
+        if queue.is_none(){
+            return None;
+        }
+        let queue_data = queue.unwrap();
+        queue_data.0.lock().unwrap().push(self.message_as_copy());
+        let mut empty = queue_data.1.lock().unwrap();
+        *empty = false;
+        queue_data.2.notify_all();
         None
     }
 }
 
 impl ApplyCommand for PopCommand {
-    fn apply_command(&mut self, queue_map: &Arc<Mutex<MessageQueueMonitor>>) -> Option<String> {
-        match queue_map
-            .lock()
-            .unwrap()
-            .pop_from_queue(self.queue_name_as_copy())
-        {
-            Ok(s) => Some(s),
-            Err(()) => None,
+    fn apply_command(&mut self, queue_map: &Arc<Mutex<MessageQueueMap>>) -> Option<String> {
+        let queue = {
+            queue_map.lock().unwrap().get_existing(self.queue_name_as_copy()) 
+        };
+        if queue.is_none(){
+            return None;
         }
+        let queue_data = queue.unwrap();
+        let mut empty = queue_data.1.lock().unwrap();
+        while *empty {
+            empty = queue_data.2.wait(empty).unwrap();
+        }
+        let popped = queue_data.0.lock().unwrap().pop();
+        if popped.is_some() {
+            let popped = popped.unwrap();  
+            *empty = popped.1;
+            return Some(popped.0);
+        }
+        None
     }
 }
 
@@ -77,7 +94,7 @@ impl Command {
         None
     }
 
-    fn read_and_stringify_from_u16_len(client_stream: &mut TcpStream) -> Option<String> {
+    pub fn read_and_stringify_from_u16_len(client_stream: &mut TcpStream) -> Option<String> {
         let mut len_buffer = [0; 2];
         if let Err(_) = client_stream.read_exact(&mut len_buffer) {
             return None;

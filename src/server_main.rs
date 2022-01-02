@@ -4,13 +4,15 @@ mod server;
 use server::runnable::Runnable;
 use server::server::Server;
 
-use std::io;
 use std::sync::Arc;
+use std::{env, io, process};
 
 fn wait_to_exit() {
-    let mut quit = String::new();
+    let quit = &mut String::new();
+    let stdin = &mut io::stdin();
     loop {
-        match io::stdin().read_line(&mut quit) {
+        quit.clear();
+        match stdin.read_line(quit) {
             Ok(_) => {
                 if quit.trim().eq("q") {
                     break;
@@ -26,7 +28,15 @@ fn wait_to_exit() {
 }
 
 fn main() -> Result<(), ()> {
-    let server = Arc::new(Server::new("localhost:8080")?);
+    let args: Vec<String> = env::args().collect();
+    if args.len() != 2 {
+        eprintln!("Usage: ./server <PORT>");
+        process::exit(1);
+    }
+
+    let port = &args[1];
+    let addr = String::from("localhost:") + port;
+    let server = Arc::new(Server::new(&addr)?);
     let server_join_handle = Server::run(&server)?;
 
     // false positive leak del buffer de stdin (atexit)

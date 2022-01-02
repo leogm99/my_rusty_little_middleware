@@ -11,7 +11,7 @@ impl DefineCommand {
 
     // Maybe a better solution would be to build another object
     // and implement a trait to make a copy
-    pub fn queue_name_as_copy(&mut self) -> String {
+    pub fn queue_name_as_copy(&self) -> String {
         self.queue.to_string()
     }
 }
@@ -29,11 +29,11 @@ impl PushCommand {
         }
     }
 
-    pub fn queue_name_as_copy(&mut self) -> String {
+    pub fn queue_name_as_copy(&self) -> String {
         self.queue.to_string()
     }
 
-    pub fn message_as_copy(&mut self) -> String {
+    pub fn message_as_copy(&self) -> String {
         self.message.to_string()
     }
 }
@@ -49,7 +49,7 @@ impl PopCommand {
         }
     }
 
-    pub fn queue_name_as_copy(&mut self) -> String {
+    pub fn queue_name_as_copy(&self) -> String {
         self.queue.to_string()
     }
 }

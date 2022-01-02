@@ -11,7 +11,7 @@ use std::{
 };
 
 use super::{
-    message_queue_monitor::MessageQueueMonitor,
+    message_queue_map::MessageQueueMap,
     runnable::{Runnable, Startable},
 };
 
@@ -28,7 +28,7 @@ pub struct Server {
     // hint: refcell no es seguro entre hilos ;)
     // handlers: RefCell<Vec<JoinHandle<()>>>
     handlers: Mutex<Vec<JoinHandle<()>>>,
-    queue_map: Arc<Mutex<MessageQueueMonitor>>,
+    queue_map: Arc<Mutex<MessageQueueMap>>,
 }
 
 impl Startable for Server {
@@ -42,7 +42,6 @@ impl Startable for Server {
         for client in self.listener.incoming() {
             if self.should_exit.load(Ordering::SeqCst) {
                 println!("Closing down");
-                self.queue_map.lock().unwrap().print_queue();
                 break;
             }
             match client {
@@ -85,7 +84,7 @@ impl Server {
                 addr: String::from(addr),
                 should_exit: AtomicBool::new(false),
                 handlers: Mutex::new(vec![]),
-                queue_map: Arc::new(Mutex::new(MessageQueueMonitor::new())),
+                queue_map: Arc::new(Mutex::new(MessageQueueMap::new())),
             }),
             Err(x) => {
                 println!("{}: {}", ERR_CREATING, x);

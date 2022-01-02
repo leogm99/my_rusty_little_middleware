@@ -1,1 +1,1 @@
-print_queue
+apply_command

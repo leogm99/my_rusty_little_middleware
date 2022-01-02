@@ -1,18 +1,18 @@
 use std::{
-    io::Read,
+    io::{Read, Write},
     net::TcpStream,
     sync::{Arc, Mutex},
 };
 
 use super::{
-    command_handler::Command,
-    message_queue_monitor::MessageQueueMonitor,
+    apply_command::Command,
+    message_queue_map::MessageQueueMap,
     runnable::{Runnable, Startable},
 };
 
 pub struct ClientHandler {
     stream_socket: Mutex<TcpStream>,
-    queue_map: Arc<Mutex<MessageQueueMonitor>>,
+    queue_map: Arc<Mutex<MessageQueueMap>>,
 }
 
 impl Startable for ClientHandler {
@@ -23,7 +23,17 @@ impl Startable for ClientHandler {
             match sock.read_exact(&mut comm) {
                 Ok(_) => {
                     if let Some(mut x) = Command::deserializer(comm[0], &mut sock) {
-                        let _ = x.apply_command(&self.queue_map);
+                        let s = x.apply_command(&self.queue_map);
+                        if s.is_some() {
+                            let response = s.unwrap().as_bytes().to_vec();
+                            let size = &response.len().to_be_bytes()[6..8];
+                            if let Err(_) = sock.write_all(&size) {
+                                break;
+                            }
+                            if let Err(_) = sock.write_all(&response.as_slice()) {
+                                break;
+                            }
+                        }
                     }
                 }
                 Err(_) => {
@@ -38,7 +48,7 @@ impl Startable for ClientHandler {
 impl Runnable for ClientHandler {}
 
 impl ClientHandler {
-    pub fn new(stream: TcpStream, queue_map: Arc<Mutex<MessageQueueMonitor>>) -> Self {
+    pub fn new(stream: TcpStream, queue_map: Arc<Mutex<MessageQueueMap>>) -> Self {
         ClientHandler {
             stream_socket: Mutex::new(stream),
             queue_map,
